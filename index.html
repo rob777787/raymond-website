@@ -557,6 +557,137 @@
     opacity: .3;
   }
 
+  /* ════════════════════════════════════════
+     APPOINTMENT BOOKING ASSISTANT
+  ════════════════════════════════════════ */
+  #chat-toggle {
+    position: fixed; bottom: 2rem; right: 2rem; z-index: 1000;
+    width: 58px; height: 58px; border-radius: 50%;
+    background: var(--gold); border: none; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 4px 24px rgba(184,151,106,.45);
+    transition: transform .3s ease, box-shadow .3s ease;
+  }
+  #chat-toggle:hover { transform: scale(1.08); box-shadow: 0 6px 32px rgba(184,151,106,.6); }
+  #chat-toggle svg { width: 24px; height: 24px; fill: var(--white); transition: opacity .2s; }
+  #chat-toggle .ico-close { display: none; }
+  #chat-toggle.open .ico-chat { display: none; }
+  #chat-toggle.open .ico-close { display: block; }
+
+  #chat-badge {
+    position: absolute; top: -4px; right: -4px;
+    width: 18px; height: 18px; border-radius: 50%;
+    background: #e05252; border: 2px solid var(--warm);
+    font-size: .55rem; color: var(--white); font-weight: 500;
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--sans); letter-spacing: 0;
+    animation: badgePulse 2s ease infinite;
+  }
+  @keyframes badgePulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.15)} }
+
+  #chat-window {
+    position: fixed; bottom: 6.5rem; right: 2rem; z-index: 999;
+    width: 360px; max-height: 520px;
+    background: var(--warm); border: 1px solid var(--stone2);
+    border-radius: 6px;
+    box-shadow: 0 16px 60px rgba(12,11,9,.18);
+    display: flex; flex-direction: column;
+    transform: translateY(20px) scale(.95); opacity: 0;
+    pointer-events: none;
+    transition: transform .35s cubic-bezier(.16,1,.3,1), opacity .35s ease;
+  }
+  #chat-window.open {
+    transform: translateY(0) scale(1); opacity: 1; pointer-events: all;
+  }
+
+  .chat-header {
+    background: var(--ink); padding: 1.2rem 1.5rem;
+    border-radius: 6px 6px 0 0;
+    display: flex; align-items: center; gap: .85rem;
+  }
+  .chat-avatar {
+    width: 36px; height: 36px; border-radius: 50%;
+    background: var(--gold); flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--serif); font-size: 1rem; font-weight: 300; color: var(--white);
+  }
+  .chat-header-info { flex: 1; }
+  .chat-header-name { font-size: .8rem; font-weight: 400; color: var(--white); letter-spacing: .06em; }
+  .chat-header-status { font-size: .62rem; color: rgba(255,255,255,.35); letter-spacing: .1em; margin-top: .15rem; display: flex; align-items: center; gap: .4rem; }
+  .chat-header-status::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: #5cb87a; flex-shrink: 0; }
+
+  .chat-messages {
+    flex: 1; overflow-y: auto; padding: 1.2rem 1.2rem 0;
+    display: flex; flex-direction: column; gap: .75rem;
+    scroll-behavior: smooth;
+  }
+  .chat-messages::-webkit-scrollbar { width: 4px; }
+  .chat-messages::-webkit-scrollbar-track { background: transparent; }
+  .chat-messages::-webkit-scrollbar-thumb { background: var(--stone2); border-radius: 2px; }
+
+  .msg {
+    max-width: 82%; font-size: .84rem; line-height: 1.55; font-weight: 300;
+    padding: .65rem .9rem; border-radius: 4px;
+    animation: msgIn .3s ease;
+  }
+  @keyframes msgIn { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:none} }
+  .msg-bot { background: var(--bone); color: var(--ink); border: 1px solid var(--stone2); align-self: flex-start; }
+  .msg-user { background: var(--gold); color: var(--white); align-self: flex-end; border: 1px solid transparent; }
+  .msg-system { background: transparent; color: var(--stone); font-size: .7rem; letter-spacing: .12em; text-transform: uppercase; text-align: center; align-self: center; border: none; padding: .3rem .5rem; }
+
+  .chat-typing {
+    align-self: flex-start; display: flex; gap: 4px; padding: .65rem .9rem;
+    background: var(--bone); border: 1px solid var(--stone2); border-radius: 4px;
+    animation: msgIn .3s ease;
+  }
+  .chat-typing span {
+    width: 5px; height: 5px; border-radius: 50%; background: var(--stone);
+    animation: typingDot 1.2s ease infinite;
+  }
+  .chat-typing span:nth-child(2) { animation-delay: .2s; }
+  .chat-typing span:nth-child(3) { animation-delay: .4s; }
+  @keyframes typingDot { 0%,60%,100%{transform:translateY(0);opacity:.4} 30%{transform:translateY(-5px);opacity:1} }
+
+  .chat-quick-replies {
+    display: flex; flex-wrap: wrap; gap: .5rem;
+    padding: .8rem 1.2rem 0; align-self: flex-start;
+  }
+  .qr {
+    font-size: .72rem; letter-spacing: .08em; color: var(--gold);
+    border: 1px solid var(--gold); border-radius: 2px;
+    padding: .35rem .75rem; cursor: pointer; background: transparent;
+    font-family: var(--sans); font-weight: 400;
+    transition: background .25s, color .25s;
+  }
+  .qr:hover { background: var(--gold); color: var(--white); }
+
+  .chat-footer {
+    padding: .9rem 1.2rem 1rem;
+    border-top: 1px solid var(--stone2);
+    display: flex; gap: .6rem; align-items: center; margin-top: .75rem;
+  }
+  #chat-input {
+    flex: 1; border: 1px solid var(--stone2); border-radius: 3px;
+    padding: .6rem .85rem; font-family: var(--sans); font-size: .84rem;
+    font-weight: 300; color: var(--ink); background: var(--white);
+    outline: none; transition: border-color .25s;
+  }
+  #chat-input:focus { border-color: var(--gold); }
+  #chat-input::placeholder { color: var(--stone2); }
+  #chat-send {
+    width: 36px; height: 36px; border-radius: 3px; border: none;
+    background: var(--gold); cursor: pointer; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    transition: background .25s;
+  }
+  #chat-send:hover { background: var(--gold-lt); }
+  #chat-send svg { width: 16px; height: 16px; fill: var(--white); }
+
+  @media (max-width: 480px) {
+    #chat-window { width: calc(100vw - 2rem); right: 1rem; bottom: 5.5rem; }
+    #chat-toggle { right: 1rem; bottom: 1rem; }
+  }
+
   </style>
 </head>
 <body>
@@ -1082,6 +1213,232 @@ document.querySelectorAll('a[href^="#"]').forEach(a => {
     if (t) { e.preventDefault(); t.scrollIntoView({ behavior: 'smooth' }); }
   });
 });
+</script>
+
+<!-- ════ APPOINTMENT BOOKING ASSISTANT ════ -->
+<button id="chat-toggle" aria-label="Open booking assistant">
+  <svg class="ico-chat" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M20 2H4a2 2 0 0 0-2 2v18l4-4h14a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2zm-2 10H6v-2h12v2zm0-4H6V6h12v2z"/></svg>
+  <svg class="ico-close" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+  <span id="chat-badge">1</span>
+</button>
+
+<div id="chat-window" role="dialog" aria-label="Appointment booking assistant">
+  <div class="chat-header">
+    <div class="chat-avatar">RA</div>
+    <div class="chat-header-info">
+      <div class="chat-header-name">Raymond Aghakhani</div>
+      <div class="chat-header-status">Available for consultations</div>
+    </div>
+  </div>
+  <div class="chat-messages" id="chat-messages"></div>
+  <div class="chat-footer">
+    <input id="chat-input" type="text" placeholder="Type a message…" autocomplete="off"/>
+    <button id="chat-send" aria-label="Send">
+      <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+    </button>
+  </div>
+</div>
+
+<script>
+/* ══ APPOINTMENT BOOKING ASSISTANT ══ */
+(function () {
+  const toggle  = document.getElementById('chat-toggle');
+  const win     = document.getElementById('chat-window');
+  const msgs    = document.getElementById('chat-messages');
+  const input   = document.getElementById('chat-input');
+  const sendBtn = document.getElementById('chat-send');
+  const badge   = document.getElementById('chat-badge');
+
+  let isOpen  = false;
+  let step    = 0;
+  let booking = {};
+
+  /* ── CONVERSATION FLOW ──
+     0  greeting
+     1  ask name
+     2  ask project type  (quick-reply)
+     3  ask location
+     4  ask date/time
+     5  confirm + done
+  */
+
+  const BOT_DELAY = 900;
+
+  function openChat() {
+    isOpen = true;
+    toggle.classList.add('open');
+    win.classList.add('open');
+    badge.style.display = 'none';
+    if (step === 0) { step = 1; setTimeout(greet, 350); }
+    setTimeout(() => input.focus(), 400);
+  }
+
+  function closeChat() {
+    isOpen = false;
+    toggle.classList.remove('open');
+    win.classList.remove('open');
+  }
+
+  toggle.addEventListener('click', () => isOpen ? closeChat() : openChat());
+
+  /* ── RENDER HELPERS ── */
+
+  function scrollBottom() { msgs.scrollTop = msgs.scrollHeight; }
+
+  function addMsg(text, type) {
+    const el = document.createElement('div');
+    el.className = 'msg msg-' + type;
+    el.textContent = text;
+    msgs.appendChild(el);
+    scrollBottom();
+    return el;
+  }
+
+  function addSystem(text) { addMsg(text, 'system'); }
+
+  function showTyping() {
+    const t = document.createElement('div');
+    t.className = 'chat-typing';
+    t.id = 'typing-indicator';
+    t.innerHTML = '<span></span><span></span><span></span>';
+    msgs.appendChild(t);
+    scrollBottom();
+  }
+
+  function hideTyping() {
+    const t = document.getElementById('typing-indicator');
+    if (t) t.remove();
+  }
+
+  function botSay(text, cb) {
+    showTyping();
+    setTimeout(() => {
+      hideTyping();
+      addMsg(text, 'bot');
+      if (cb) cb();
+    }, BOT_DELAY);
+  }
+
+  function removeQuickReplies() {
+    const qr = document.getElementById('quick-replies');
+    if (qr) qr.remove();
+  }
+
+  function showQuickReplies(options) {
+    removeQuickReplies();
+    const wrap = document.createElement('div');
+    wrap.className = 'chat-quick-replies';
+    wrap.id = 'quick-replies';
+    options.forEach(opt => {
+      const btn = document.createElement('button');
+      btn.className = 'qr';
+      btn.textContent = opt;
+      btn.addEventListener('click', () => handleUserInput(opt));
+      wrap.appendChild(btn);
+    });
+    msgs.appendChild(wrap);
+    scrollBottom();
+  }
+
+  /* ── CONVERSATION STEPS ── */
+
+  function greet() {
+    botSay("Hi there! I'm here to help you schedule a consultation with Raymond. Before we get started — what's your name?");
+  }
+
+  function askProjectType() {
+    botSay('Great to meet you, ' + booking.name + '! What kind of project are you looking to discuss?', () => {
+      showQuickReplies([
+        'Custom Home',
+        'Commercial Build',
+        'Multi-Unit / Condo',
+        'Renovation',
+        'Project Management',
+        'Other'
+      ]);
+    });
+  }
+
+  function askLocation() {
+    botSay("Got it — " + booking.project + ". Where is the project located? (City or neighborhood is fine.)");
+  }
+
+  function askTime() {
+    botSay("Perfect. What day and time works best for a consultation? We're typically available Monday–Friday, 9 am–5 pm.", () => {
+      showQuickReplies(['This week', 'Next week', 'Flexible / ASAP']);
+    });
+  }
+
+  function confirmBooking() {
+    botSay(
+      'Thanks, ' + booking.name + '! Here\'s a summary:\n\n' +
+      '📋 Project: ' + booking.project + '\n' +
+      '📍 Location: ' + booking.location + '\n' +
+      '🗓 Preferred time: ' + booking.time + '\n\n' +
+      'We\'ll reach out within 24 hours to confirm your consultation. Is there anything else you\'d like to add?',
+      () => {
+        step = 6;
+        addSystem('Booking request received');
+      }
+    );
+  }
+
+  function handleFollowUp(text) {
+    if (/no|nope|that.?s? (all|it|good|great|fine|ok)/i.test(text)) {
+      botSay('Wonderful! Raymond looks forward to speaking with you. You can also reach us anytime through the contact form on this page. Have a great day!');
+    } else {
+      botSay('Noted — we\'ll make sure to discuss that during the call. Talk soon!');
+    }
+    step = 7;
+  }
+
+  /* ── INPUT HANDLER ── */
+
+  function handleUserInput(raw) {
+    removeQuickReplies();
+    const text = raw.trim();
+    if (!text) return;
+    addMsg(text, 'user');
+    input.value = '';
+
+    switch (step) {
+      case 1:
+        booking.name = text.split(' ')[0];
+        step = 2;
+        askProjectType();
+        break;
+      case 2:
+        booking.project = text;
+        step = 3;
+        askLocation();
+        break;
+      case 3:
+        booking.location = text;
+        step = 4;
+        askTime();
+        break;
+      case 4:
+        booking.time = text;
+        step = 5;
+        confirmBooking();
+        break;
+      case 6:
+        handleFollowUp(text);
+        break;
+      default:
+        botSay("I'm here if you have any other questions about your project or the booking.");
+    }
+  }
+
+  sendBtn.addEventListener('click', () => handleUserInput(input.value));
+  input.addEventListener('keydown', e => { if (e.key === 'Enter') handleUserInput(input.value); });
+
+  /* ── HOVER CURSOR FIX ── */
+  [toggle, win].forEach(el => {
+    el.addEventListener('mouseenter', () => document.body.classList.add('hov'));
+    el.addEventListener('mouseleave', () => document.body.classList.remove('hov'));
+  });
+})();
 </script>
 </body>
 </html>
