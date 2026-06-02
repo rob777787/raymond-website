@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nexora Racer</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0a0a0f;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    font-family: 'Segoe UI', sans-serif;
+    color: #fff;
+    overflow: hidden;
+  }
+  #ui {
+    display: flex;
+    gap: 40px;
+    margin-bottom: 16px;
+    font-size: 14px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: #aaa;
+  }
+  #ui span { color: #c084fc; font-weight: 700; font-size: 18px; }
+  #canvas-wrap {
+    position: relative;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 0 60px #7c3aed55;
+  }
+  canvas { display: block; }
+  #overlay {
+    position: absolute;
+    inset: 0;
+    background: #0a0a0fcc;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    backdrop-filter: blur(4px);
+  }
+  #overlay h1 {
+    font-size: 42px;
+    font-weight: 900;
+    background: linear-gradient(135deg, #c084fc, #818cf8);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    letter-spacing: -1px;
+  }
+  #overlay p { color: #888; font-size: 14px; text-align: center; line-height: 1.8; }
+  #overlay button {
+    margin-top: 8px;
+    padding: 14px 40px;
+    background: linear-gradient(135deg, #7c3aed, #4f46e5);
+    border: none;
+    border-radius: 10px;
+    color: #fff;
+    font-size: 16px;
+    font-weight: 700;
+    cursor: pointer;
+    letter-spacing: 1px;
+    transition: transform 0.1s, box-shadow 0.1s;
+    box-shadow: 0 4px 24px #7c3aed55;
+  }
+  #overlay button:hover { transform: scale(1.05); box-shadow: 0 6px 32px #7c3aed88; }
+  #best { color: #f59e0b; font-size: 13px; }
+</style>
+</head>
+<body>
+<div id="ui">
+  <div>Lap <span id="lapNum">0</span> / 3</div>
+  <div>Time <span id="timer">0.00</span>s</div>
+  <div>Best <span id="best">--</span>s</div>
+  <div>Speed <span id="speed">0</span></div>
+</div>
+<div id="canvas-wrap">
+  <canvas id="c" width="700" height="520"></canvas>
+  <div id="overlay">
+    <h1>NEXORA RACER</h1>
+    <p>Arrow keys or WASD to drive<br>Complete 3 laps as fast as you can!</p>
+    <button id="startBtn">START RACE</button>
+  </div>
+</div>
+
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const W = canvas.width, H = canvas.height;
+
+// ── Track definition (centre-line waypoints, then build ribbon) ──────────────
+const TRACK_W = 72;
+const waypoints = [
+  {x:350,y:460}, {x:160,y:460}, {x:80,y:390}, {x:80,y:280},
+  {x:120,y:200}, {x:220,y:140}, {x:350,y:120}, {x:480,y:100},
+  {x:590,y:140}, {x:630,y:240}, {x:610,y:350}, {x:540,y:420},
+  {x:450,y:460}, {x:350,y:460}
+];
+
+function ptAt(t) {
+  // Catmull-Rom along waypoints (closed)
+  const n = waypoints.length - 1;
+  const seg = Math.floor(t * n);
+  const lt = t * n - seg;
+  const p0 = waypoints[Math.max(0, seg-1)];
+  const p1 = waypoints[seg];
+  const p2 = waypoints[Math.min(n, seg+1)];
+  const p3 = waypoints[Math.min(n, seg+2)];
+  return catmull(p0,p1,p2,p3,lt);
+}
+function catmull(p0,p1,p2,p3,t) {
+  const t2=t*t, t3=t2*t;
+  return {
+    x: 0.5*((2*p1.x)+(-p0.x+p2.x)*t+(2*p0.x-5*p1.x+4*p2.x-p3.x)*t2+(-p0.x+3*p1.x-3*p2.x+p3.x)*t3),
+    y: 0.5*((2*p1.y)+(-p0.y+p2.y)*t+(2*p0.y-5*p1.y+4*p2.y-p3.y)*t2+(-p0.y+3*p1.y-3*p2.y+p3.y)*t3),
+  };
+}
+
+// Build track path (sample many points)
+const SAMPLES = 300;
+const trackPts = [];
+for(let i=0;i<=SAMPLES;i++) trackPts.push(ptAt(i/SAMPLES));
+
+function buildTrackPath(offset) {
+  const pts = trackPts.map((p,i) => {
+    const prev = trackPts[(i-1+trackPts.length)%trackPts.length];
+    const next = trackPts[(i+1)%trackPts.length];
+    const dx = next.x - prev.x, dy = next.y - prev.y;
+    const len = Math.hypot(dx,dy)||1;
+    return { x: p.x + (-dy/len)*offset, y: p.y + (dx/len)*offset };
+  });
+  const path = new Path2D();
+  path.moveTo(pts[0].x, pts[0].y);
+  for(let i=1;i<pts.length;i++) path.lineTo(pts[i].x, pts[i].y);
+  path.closePath();
+  return path;
+}
+
+const outerPath = buildTrackPath(TRACK_W/2);
+const innerPath = buildTrackPath(-TRACK_W/2);
+
+// Pre-render track to offscreen canvas
+const trackCanvas = document.createElement('canvas');
+trackCanvas.width = W; trackCanvas.height = H;
+const tctx = trackCanvas.getContext('2d');
+
+function drawTrack(c) {
+  // grass
+  c.fillStyle = '#1a3a1a';
+  c.fillRect(0,0,W,H);
+  // tarmac
+  c.fillStyle = '#2a2a35';
+  c.fill(outerPath, 'nonzero');
+  // inner grass
+  c.fillStyle = '#1a3a1a';
+  c.fill(innerPath);
+  // kerbs
+  c.strokeStyle = '#e44'; c.lineWidth = 5;
+  c.setLineDash([18,18]);
+  c.stroke(outerPath);
+  c.strokeStyle = '#ee4'; c.lineWidth = 4;
+  c.stroke(innerPath);
+  c.setLineDash([]);
+  // centre dashes
+  c.strokeStyle = '#ffffff18'; c.lineWidth = 2;
+  c.setLineDash([14,14]);
+  const mid = new Path2D();
+  mid.moveTo(trackPts[0].x, trackPts[0].y);
+  for(let i=1;i<trackPts.length;i++) mid.lineTo(trackPts[i].x, trackPts[i].y);
+  mid.closePath();
+  c.stroke(mid);
+  c.setLineDash([]);
+
+  // Start/finish line
+  const sf = trackPts[0];
+  const sfN = trackPts[1];
+  const dx=sfN.x-sf.x, dy=sfN.y-sf.y, l=Math.hypot(dx,dy);
+  const nx=-dy/l, ny=dx/l;
+  c.save();
+  c.translate(sf.x, sf.y);
+  c.rotate(Math.atan2(dy,dx));
+  for(let i=0;i<8;i++) {
+    c.fillStyle = i%2===0 ? '#fff' : '#000';
+    c.fillRect(-4, -TRACK_W/2 + i*(TRACK_W/8), 8, TRACK_W/8);
+  }
+  c.restore();
+}
+drawTrack(tctx);
+
+// ── Car ───────────────────────────────────────────────────────────────────────
+const CAR_L = 22, CAR_W = 12;
+const car = {
+  x: trackPts[5].x, y: trackPts[5].y,
+  angle: Math.atan2(trackPts[6].y-trackPts[5].y, trackPts[6].x-trackPts[5].x),
+  speed: 0, steer: 0,
+  onTrack: true,
+};
+
+// ── AI cars ───────────────────────────────────────────────────────────────────
+const AI_COLORS = ['#f87171','#34d399','#60a5fa'];
+const aiCars = AI_COLORS.map((col,i) => ({
+  t: (i+1)*0.07,          // position along track 0..1
+  speed: 0,
+  color: col,
+  x:0, y:0, angle:0,
+  lap: 0,
+}));
+
+// ── Input ─────────────────────────────────────────────────────────────────────
+const keys = {};
+window.addEventListener('keydown', e => { keys[e.key] = true; e.preventDefault(); });
+window.addEventListener('keyup',   e => { keys[e.key] = false; });
+
+// ── Game state ────────────────────────────────────────────────────────────────
+let state = 'menu';  // menu | countdown | racing | finish
+let countdown = 3;
+let cdTimer = 0;
+let elapsed = 0;
+let lap = 0;
+let bestTime = null;
+let lastT = 0;   // player track-t last frame (for lap detection)
+let animId;
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function closestT(x, y) {
+  let best = Infinity, bestI = 0;
+  for(let i=0;i<trackPts.length;i++) {
+    const d = Math.hypot(trackPts[i].x-x, trackPts[i].y-y);
+    if(d<best){ best=d; bestI=i; }
+  }
+  return bestI/trackPts.length;
+}
+
+function isOnTrack(x, y) {
+  return ctx.isPointInPath(outerPath, x, y) && !ctx.isPointInPath(innerPath, x, y);
+}
+
+function drawCar(cx, c, x, y, angle, col, shadow=false) {
+  cx.save();
+  cx.translate(x, y);
+  cx.rotate(angle);
+  if(shadow){ cx.globalAlpha=0.3; cx.translate(3,3); }
+  // body
+  const grad = cx.createLinearGradient(-CAR_L/2,-CAR_W/2, CAR_L/2, CAR_W/2);
+  grad.addColorStop(0, col);
+  grad.addColorStop(1, '#000a');
+  cx.fillStyle = grad;
+  cx.beginPath();
+  cx.roundRect(-CAR_L/2, -CAR_W/2, CAR_L, CAR_W, 4);
+  cx.fill();
+  // windshield
+  cx.fillStyle = '#b0e0ff55';
+  cx.fillRect(0, -CAR_W/2+2, CAR_L/3, CAR_W-4);
+  // wheels
+  cx.fillStyle = '#111';
+  [[-CAR_L/2+3, -CAR_W/2-1],[CAR_L/2-7,-CAR_W/2-1],
+   [-CAR_L/2+3, CAR_W/2-1], [CAR_L/2-7, CAR_W/2-1]].forEach(([wx,wy])=>{
+    cx.fillRect(wx, wy, 6, 3);
+  });
+  if(shadow) cx.globalAlpha=1;
+  cx.restore();
+}
+
+// ── Update ────────────────────────────────────────────────────────────────────
+let last = null;
+function update(ts) {
+  const dt = Math.min((ts - (last??ts)) / 1000, 0.05);
+  last = ts;
+
+  if(state === 'countdown') {
+    cdTimer += dt;
+    if(cdTimer >= 1) { cdTimer=0; countdown--; if(countdown<0){ state='racing'; } }
+  }
+
+  if(state === 'racing') {
+    elapsed += dt;
+
+    // -- Player input
+    const up    = keys['ArrowUp']   || keys['w'] || keys['W'];
+    const down  = keys['ArrowDown'] || keys['s'] || keys['S'];
+    const left  = keys['ArrowLeft'] || keys['a'] || keys['A'];
+    const right = keys['ArrowRight']|| keys['d'] || keys['D'];
+
+    const maxSpeed = car.onTrack ? 280 : 140;
+    const accel    = car.onTrack ? 340 : 120;
+    const brake    = car.onTrack ? 480 : 200;
+    const friction = car.onTrack ? 160 : 340;
+    const turnRate = 2.4;
+
+    if(up)   car.speed = Math.min(car.speed + accel*dt, maxSpeed);
+    if(down) car.speed = Math.max(car.speed - brake*dt, -80);
+    if(!up && !down) {
+      car.speed -= Math.sign(car.speed)*Math.min(Math.abs(car.speed), friction*dt);
+    }
+
+    const steerPower = Math.min(Math.abs(car.speed)/120, 1);
+    if(left)  car.angle -= turnRate * steerPower * dt;
+    if(right) car.angle += turnRate * steerPower * dt;
+
+    car.x += Math.cos(car.angle)*car.speed*dt;
+    car.y += Math.sin(car.angle)*car.speed*dt;
+
+    car.onTrack = isOnTrack(car.x, car.y);
+
+    // Lap detection
+    const curT = closestT(car.x, car.y);
+    if(lastT > 0.9 && curT < 0.1 && car.speed > 0) {
+      lap++;
+      document.getElementById('lapNum').textContent = lap;
+      if(lap >= 3) {
+        state = 'finish';
+        showFinish();
+      }
+    }
+    lastT = curT;
+
+    // -- AI cars
+    aiCars.forEach(ai => {
+      ai.speed = 180 + Math.sin(ai.t*20)*30;
+      ai.t += (ai.speed * dt) / (trackPts.length * 4);
+      if(ai.t > 1) { ai.t -= 1; ai.lap++; }
+      const idx = Math.floor(ai.t * trackPts.length) % trackPts.length;
+      const nxt = (idx+1)%trackPts.length;
+      const lt  = ai.t*trackPts.length - idx;
+      ai.x = trackPts[idx].x*(1-lt) + trackPts[nxt].x*lt;
+      ai.y = trackPts[idx].y*(1-lt) + trackPts[nxt].y*lt;
+      ai.angle = Math.atan2(trackPts[nxt].y-trackPts[idx].y, trackPts[nxt].x-trackPts[idx].x);
+    });
+  }
+
+  draw();
+  animId = requestAnimationFrame(update);
+}
+
+// ── Draw ──────────────────────────────────────────────────────────────────────
+function draw() {
+  ctx.clearRect(0,0,W,H);
+  ctx.drawImage(trackCanvas,0,0);
+
+  // AI cars
+  aiCars.forEach(ai => {
+    drawCar(ctx, ctx, ai.x, ai.y, ai.angle, ai.color, true);
+    drawCar(ctx, ctx, ai.x, ai.y, ai.angle, ai.color);
+  });
+
+  // Player car (shadow then car)
+  drawCar(ctx, ctx, car.x, car.y, car.angle, '#c084fc', true);
+  drawCar(ctx, ctx, car.x, car.y, car.angle, '#c084fc');
+
+  // Headlights glow
+  ctx.save();
+  ctx.translate(car.x, car.y);
+  ctx.rotate(car.angle);
+  const grd = ctx.createRadialGradient(CAR_L/2,0,1, CAR_L/2,0,40);
+  grd.addColorStop(0,'#ffffffaa');
+  grd.addColorStop(1,'transparent');
+  ctx.fillStyle = grd;
+  ctx.beginPath(); ctx.arc(CAR_L/2,0,40,0,Math.PI*2); ctx.fill();
+  ctx.restore();
+
+  // HUD updates
+  document.getElementById('timer').textContent = elapsed.toFixed(2);
+  document.getElementById('speed').textContent = Math.abs(Math.round(car.speed));
+
+  // Countdown overlay (drawn in canvas)
+  if(state === 'countdown') {
+    ctx.fillStyle = '#0008';
+    ctx.fillRect(0,0,W,H);
+    ctx.fillStyle = '#c084fc';
+    ctx.font = 'bold 96px Segoe UI';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const label = countdown > 0 ? countdown : 'GO!';
+    ctx.fillText(label, W/2, H/2);
+  }
+
+  // Off-track warning
+  if(state==='racing' && !car.onTrack) {
+    ctx.fillStyle = '#f59e0b22';
+    ctx.fillRect(0,0,W,H);
+    ctx.fillStyle = '#f59e0b';
+    ctx.font = 'bold 20px Segoe UI';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    ctx.fillText('OFF TRACK — SLOW!', W/2, 12);
+  }
+
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'alphabetic';
+}
+
+// ── Finish ────────────────────────────────────────────────────────────────────
+function showFinish() {
+  const t = parseFloat(elapsed.toFixed(2));
+  if(bestTime === null || t < bestTime) bestTime = t;
+  document.getElementById('best').textContent = bestTime.toFixed(2);
+
+  const ov = document.getElementById('overlay');
+  ov.innerHTML = `
+    <h1>FINISH!</h1>
+    <p>Your time: <strong style="color:#c084fc">${t.toFixed(2)}s</strong><br>
+       Best: <strong style="color:#f59e0b">${bestTime.toFixed(2)}s</strong></p>
+    <button id="startBtn">RACE AGAIN</button>
+  `;
+  ov.style.display = 'flex';
+  document.getElementById('startBtn').addEventListener('click', startRace);
+}
+
+// ── Start ─────────────────────────────────────────────────────────────────────
+function startRace() {
+  document.getElementById('overlay').style.display = 'none';
+  // Reset car
+  car.x = trackPts[5].x; car.y = trackPts[5].y;
+  car.angle = Math.atan2(trackPts[6].y-trackPts[5].y, trackPts[6].x-trackPts[5].x);
+  car.speed = 0; car.onTrack = true;
+  // Reset AI
+  aiCars.forEach((ai,i) => { ai.t=(i+1)*0.07; ai.lap=0; });
+  // Reset state
+  elapsed = 0; lap = 0; lastT = 0;
+  countdown = 3; cdTimer = 0;
+  state = 'countdown';
+  document.getElementById('lapNum').textContent = 0;
+  document.getElementById('timer').textContent = '0.00';
+}
+
+document.getElementById('startBtn').addEventListener('click', startRace);
+requestAnimationFrame(update);
+</script>
+</body>
+</html>
